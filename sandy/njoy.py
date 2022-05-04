@@ -189,6 +189,47 @@ NJOY_SIG0 = [1e10]
 NJOY_THERMR_EMAX = 10
 
 
+def write_float(x):
+    if abs(x) >= 1e0 and abs(x) < 1e1:
+        y = f"{x:13.6e}"
+    elif abs(x) >= 1E1 and abs(x) < 1E2:
+        y = f"{x:13.6e}"
+    elif abs(x) >= 1E2 and abs(x) < 1E3:
+        y = f"{x:13.6e}"
+    elif abs(x) >= 1E3 and abs(x) < 1E4:
+        y = f"{x:13.6e}"
+    elif abs(x) >= 1E4 and abs(x) < 1E5:
+        y = f"{x:13.6e}"
+    elif abs(x) >= 1E5 and abs(x) < 1E6:
+        y = f"{x:13.6e}"
+    elif abs(x) >= 1E6 and abs(x) < 1E7:
+        y = f"{x:13.6e}"
+    elif abs(x) >= 1E7 and abs(x) < 1E8:
+        y = f"{x:13.6e}"
+    elif abs(x) >= 1E8 and abs(x) < 1E10:
+        y = f"{x:13.6e}"
+    elif x == 0:
+        y = f"{x:13.6e}"
+    elif abs(x) < 1E0 and abs(x) >= 1e-9:
+        y = f"{x:13.6e}"
+    else:
+        y = f"{x:12.5e}"
+    return y
+
+
+def write_float_list(lst):
+    """
+    Write list of floats into ENDF-6 format.
+
+    Returns
+    -------
+    `list` of `str`
+        list of 66-characters-long ENDF-6 formatted string
+    """
+    itr = sandy.shared.grouper(map(write_float, lst), 5, fillvalue=" "*11)
+    return ["".join(vals) for vals in itr]
+
+
 def get_njoy():
     """
     Extract njoy executable from system environment variable `NJOY`.
@@ -1061,6 +1102,89 @@ def _groupr_input(endfin, pendfin, gendfout, mat,
     return "\n".join(text) + "\n"
 
 
+def _leapr_input(thermout, mat_leapr, za_leapr, awr, spr, npr, alpha, beta,
+                 delta, ni, tbeta, skappa, twt=0, c=0.0, cfrac=0,
+                 rho=None, oscillator_e=None, oscillator_weight=None,
+                 nkappa=None, kappa_increment=None, lat=0, iel=0, ncold=0,
+                 nsk=0, temp=NJOY_TEMPERATURES[0], iprint=False, nphon=100,
+                 isabt=0, log=False, smin=1e-75, aws=None, sps=None, mss=None,
+                 b7=None):
+    text = ["leapr"]
+    # endf output unit for thermal file
+    text += [f"{thermout:d} /"]
+    text += ["'sandy runs leapr' /"]
+    printflag = int(iprint)
+    printlog = int(log)
+    # run control
+    text += [f"1 {printflag:d} {nphon:d} / NTEMPR IPRINT IPHON"]
+    # endf output control
+    text += [f"{mat_leapr:d} {za_leapr:d} {isabt:d} {printlog:d} {smin} / MAT ZA ISABT ILOG SMIN"]
+    # principal scatterer control
+    text += [f"{awr} {spr} {npr} {iel:d} {ncold:d} {nsk:d}/ AWR SPR NPR IEL NCOLD NSK"]
+    # secondary scatterer control
+    nss = 1 if aws and sps and mss and b7 else 0
+    if nss == 1:
+        text += [f"1 {b7:d} {aws} {sps} {mss}/ NSS B7 AWS SPS MSS"]
+    else:
+        text += ["0/ NSS B7 AWS SPS MSS"]
+    # alpha, beta control
+    alphalist = sorted([alpha]) if isinstance(alpha, int) or isinstance(alpha, float) else sorted(alpha)
+    nalpha = len(alphalist)
+    betalist = sorted([beta]) if isinstance(beta, int) or isinstance(beta, float) else sorted(beta)
+    nbeta = len(betalist)
+    text += [f" {nalpha:d} {nbeta:d} {lat:d}/ NALPHA NBETA LAT"]
+    # alpha values
+    tab1 = "\n".join(write_float_list(alphalist))
+    text += [tab1 + "/ end of alpha grid"]
+    # beta values
+    tab1 = "\n".join(write_float_list(betalist))
+    text += [tab1 + "/ end of beta grid"]
+    # temperature
+    text += [f"  {temp:.1f} / temperature (K)"]
+    # continuous distribution control
+    delta_ = write_float(delta)
+    text += [f"{delta_} {ni:d} / frequency distribution: DELTA NI"]
+    # rho values
+    if rho:
+        rholist = sorted([rho]) if isinstance(rho, int) or isinstance(rho, float) else sorted(rho)
+        tab1 = "\n".join(write_float_list(rholist))
+        text += [tab1 + "/"]
+    # continuous distribution parameters
+    tbetalist = [tbeta] if isinstance(tbeta, int) or isinstance(tbeta, float) else tbeta
+    if twt == 0:
+        cont_distr_params = [0]*(1+len(tbetalist))
+        cont_distr_params[0] = twt
+        cont_distr_params[1::] = tbetalist
+    else:
+        cont_distr_params = [0]*(2+len(tbetalist))
+        cont_distr_params[0] = twt
+        cont_distr_params[1] = c
+        cont_distr_params[2::] = tbetalist
+    tab1 = "\n".join(write_float_list(cont_distr_params))
+    text += [tab1 + " / weights: TWT C TBETA"]
+    if oscillator_e and oscillator_weight:
+        oscillator_e_list = [oscillator_e] if isinstance(oscillator_e, int) or isinstance(oscillator_e, float) else oscillator_e
+        oscillator_weight_list = [oscillator_weight] if isinstance(oscillator_weight, int) or isinstance(oscillator_weight, float) else oscillator_weight
+        noscillator = len(oscillator_e_list)
+        text += [f"{noscillator:d} / discrete oscillators: ND"]
+        tab1 = "\n".join(write_float_list(oscillator_e_list))
+        text += [tab1 + "/ Energies"]
+        tab1 = "\n".join(write_float_list(oscillator_weight_list))
+        text += [tab1 + "/ weights"]
+    if nsk == 0 and lat == 1:
+        text += [f"{nkappa:d} {kappa_increment} / NKA DKA"]
+    skappa_list = [skappa] if isinstance(skappa, int) or isinstance(skappa, float) else skappa
+    tab1 = "\n".join(write_float_list(skappa_list))
+    text += [tab1 + "/ end of skappa"]
+    if nsk == 2:
+        text += [f"   {cfrac} /"]
+    else:
+        text += ["   0 /"]
+    text += ["'Leapr module process with SANDY'"]
+    text += ["/ end leapr"]
+    return "\n".join(text) + "\n"
+
+
 def _run_njoy(text, inputs, outputs, exe=None):
     """
     Run njoy executable for given input.
@@ -1111,6 +1235,7 @@ def process(
         kermas=[302, 303, 304, 318, 402, 442, 443, 444, 445, 446, 447],
         temperatures=[293.6],
         suffixes=None,
+        leapr=False,
         broadr=True,
         thermr=True,
         unresr=False,
@@ -1202,14 +1327,14 @@ def process(
     outputs : `map`
         map of {`tape` : `file`) for ouptut files
     """
-    tape = Endf6.from_file(endftape)
-    mat = tape.mat[0]
-    info = tape.read_section(mat, 1, 451)
-    meta = info["LISO"]
-    za = int(info["ZA"])
-    zam = za*10 + meta
-    za_new = za + meta*100 + 300 if meta else za
-    outprefix = zam if method == "aleph" else za_new
+    tape = sandy.Endf6.from_file(endftape)
+    mat = tape.to_series().index.get_level_values("MAT").unique()[0]
+#    info = tape.read_section(mat, 1, 451)
+#    meta = info["LISO"]
+#    za = int(info["ZA"])
+#    zam = za*10 + meta
+#    za_new = za + meta*100 + 300 if meta else za
+    outprefix = mat #zam if method == "aleph" else za_new
     inputs = {}
     outputs = {}
     # Only kwargs are passed to NJOY inputs, then add temperatures and mat
@@ -1218,11 +1343,11 @@ def process(
         "mat": mat,
         })
     # Check input args
-    if not suffixes:
-        suffixes = [get_suffix(temp, meta, method) for temp in temperatures]
-    if len(suffixes) != len(temperatures):
-        msg = "number of suffixes must match number of temperatures"
-        raise ValueError(msg)
+#    if not suffixes:
+#        suffixes = [get_suffix(temp, meta, method) for temp in temperatures]
+ #   if len(suffixes) != len(temperatures):
+ #       msg = "number of suffixes must match number of temperatures"
+#        raise ValueError(msg)
     inputs["tape20"] = endftape
     e = 21
     p = e + 1
@@ -1236,9 +1361,14 @@ def process(
         o = p + 1
         text += _broadr_input(-e, -p, -o, **kwargs)
         p = o
+    if leapr:
+        text = _leapr_input(kwargs["thermout"], kwargs["mat_leapr"], kwargs["za_leapr"], kwargs["awr"], kwargs["spr"], kwargs["npr"],kwargs["alpha"], kwargs["beta"], kwargs["delta"], kwargs["ni"], kwargs["tbeta"], kwargs["skappa"])
     if thermr:
         o = p + 1
-        text += _thermr_input(0, -p, -o, **kwargs)
+        if leapr:
+            text += _thermr_input(kwargs["thermout"], -p, -o, **kwargs)
+        else:
+            text += _thermr_input(0, -p, -o, **kwargs)
         p = o
     if unresr:
         o = p + 1

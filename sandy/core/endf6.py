@@ -2475,3 +2475,32 @@ If you want to process 0K cross sections use `temperature=0.1`.
             'chi': run_chi if chi else False,
             }
         return cov_info
+
+    def get_leapr(self,
+                  temperature=293.6,
+                  njoy=None,
+                  to_file=None,
+                  verbose=False,
+                  err=0.005,
+                  **kwargs):
+        kwds_njoy = kwargs.copy()
+        kwds_njoy["broadr"] = False
+        kwds_njoy["thermr"] = False
+        kwds_njoy["gaspr"] = False
+        kwds_njoy["heatr"] = False
+        kwds_njoy["purr"] = False
+        kwds_njoy["unresr"] = False
+        kwds_njoy['keep_pendf'] = False
+        kwds_njoy['acer'] = False
+        with TemporaryDirectory() as td:
+            endf6file = os.path.join(td, "endf6_file")
+            self.to_file(endf6file)
+            outputs = sandy.njoy.process(
+                    endf6file,
+                    verbose=verbose,
+                    temperatures=[temperature],
+                    suffixes=[0],
+                    leapr=True,
+                    **kwds_njoy,
+                    )
+        return outputs
