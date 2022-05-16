@@ -189,7 +189,9 @@ class Xs():
             if mt in redundant_xs:
                 mt = self.data.columns.get_level_values("MT")\
                          .intersection(redundant_xs[mt]).union([mt])
-            u_xs.data.loc[:, (mat, mt)] = u_xs.data.loc[:, (mat, mt)].multiply(u_pert.right, axis='index')
+            u_xs.data.loc[:, (mat, mt)] = u_xs.data.loc[:, (mat, mt)]\
+                                              .multiply(u_pert.right,
+                                                        axis='index')
         return self.__class__(u_xs.data)
 
     def filter_energies(self, energies):
