@@ -653,7 +653,7 @@ def parse(iargs=None):
                         help="seed for random sampling of MF35 covariance "
                              "matrix (default = random)")
     parser.add_argument('--temperatures', '-T',
-                        default=[],
+                        default=None,
                         type=float,
                         action='store',
                         nargs="+",
@@ -735,7 +735,8 @@ def extract_samples(ftape, covtape):
                 # Limit imposed by running ERRORR to get covariance matrices
                 raise sandy.Error("More than one MAT number was found")
             endf6 = sandy.Endf6.from_file(init.file)
-            covtape = endf6.get_errorr(njoy=init.njoy)
+            covtape = endf6.get_errorr(temperature=init.temperatures[0],
+                                       njoy=init.njoy)
         
             
                 
